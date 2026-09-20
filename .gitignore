@@ -1,0 +1,43 @@
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Node / npm (dipakai nanti untuk Capacitor) ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# --- Env & secrets ---
+.env
+.env.local
+.env.*.local
+
+# --- Deployment (Vercel) ---
+.vercel/
+
+# --- Capacitor / Android (Phase 9.4) ---
+android/
+ios/
+capacitor.config.json
+.gradle/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# --- Local backup exports user might accidentally drop in repo ---
+catatuang-backup-*.json
+catatuang-backup-*.csv
+
+# --- Misc ---
+*.log
+.cache/
