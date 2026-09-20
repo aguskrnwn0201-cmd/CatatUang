@@ -218,8 +218,8 @@
 - [x] Offline mode: matikan jaringan, pastikan semua fitur tetap berjalan
 
 ### 9.3 Deployment
-- [ ] Deploy ke **Vercel** atau **GitHub Pages** (folder statis, tanpa build step)
-- [ ] Verifikasi URL publik bisa diakses & PWA install prompt muncul
+- [x] Deploy ke **Vercel** atau **GitHub Pages** (folder statis, tanpa build step)
+- [x] Verifikasi URL publik bisa diakses & PWA install prompt muncul
 
 ### 9.4 Android APK (Opsional)
 - [ ] Setup Capacitor (`npm init` + install `@capacitor/core`, `@capacitor/android`)
