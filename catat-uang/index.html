@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#10B981" />
+  <meta name="description" content="Aplikasi pencatat keuangan pribadi yang cepat, gratis, dan aman." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="CatatUang" />
+
+  <title>CatatUang</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="assets/icons/icon-192.png" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#10B981',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Prevent overscroll bounce on iOS */
+    html, body {
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Smooth slide-up animation untuk modal */
+    .modal-enter {
+      animation: slideUp 0.25s ease-out forwards;
+    }
+    .modal-leave {
+      animation: slideDown 0.2s ease-in forwards;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    @keyframes slideDown {
+      from { transform: translateY(0);    opacity: 1; }
+      to   { transform: translateY(100%); opacity: 0; }
+    }
+
+    /* Ripple effect pada tombol */
+    .btn-ripple {
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-ripple:active::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.25);
+      border-radius: inherit;
+    }
+
+    /* Safe area untuk iPhone notch */
+    .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+    /* Toast notification */
+    #toast {
+      position: fixed;
+      bottom: 88px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #0F172A;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 100;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 font-sans select-none">
+
+  <!-- ===================== APP CONTAINER ===================== -->
+  <div id="app" class="max-w-md mx-auto relative min-h-screen flex flex-col">
+
+    <!-- ===================== VIEWS ===================== -->
+
+    <!-- VIEW: Dashboard -->
+    <section id="view-dashboard" class="view flex-1 overflow-y-auto no-scrollbar pb-24">
+      <!-- Header -->
+      <div class="bg-emerald-500 px-4 pt-10 pb-16 text-white">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <p class="text-emerald-100 text-sm">Total Saldo</p>
+            <h1 id="dashboard-total-saldo" class="text-3xl font-bold mt-0.5">Rp 0</h1>
+          </div>
+          <div class="w-10 h-10 bg-emerald-400 rounded-full flex items-center justify-center">
+            <i data-lucide="wallet" class="w-5 h-5"></i>
+          </div>
+        </div>
+        <!-- Income / Expense summary -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-emerald-400/40 rounded-2xl p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <div class="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                <i data-lucide="arrow-down-left" class="w-3.5 h-3.5"></i>
+              </div>
+              <span class="text-emerald-100 text-xs">Pemasukan</span>
+            </div>
+            <p id="dashboard-total-pemasukan" class="text-white font-semibold text-base">Rp 0</p>
+          </div>
+          <div class="bg-emerald-400/40 rounded-2xl p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <div class="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+              </div>
+              <span class="text-emerald-100 text-xs">Pengeluaran</span>
+            </div>
+            <p id="dashboard-total-pengeluaran" class="text-white font-semibold text-base">Rp 0</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content area (card naik ke atas, overlap header) -->
+      <div class="-mt-8 px-4 space-y-4">
+
+        <!-- Donut Chart Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-4">
+          <!-- Header chart + filter bulan -->
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-sm font-semibold text-slate-700">Pengeluaran</h2>
+              <p id="dashboard-chart-month" class="text-xs text-slate-400"></p>
+            </div>
+            <div class="flex items-center gap-1">
+              <button id="btn-dash-prev-month"
+                class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
+                <i data-lucide="chevron-left" class="w-4 h-4 text-slate-400"></i>
+              </button>
+              <button id="btn-dash-next-month"
+                class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
+                <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+              </button>
+            </div>
+          </div>
+          <div id="chart-empty-state" class="hidden text-center py-6 text-slate-400 text-sm">
+            <i data-lucide="pie-chart" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+            Belum ada pengeluaran bulan ini
+          </div>
+          <div id="chart-container" class="relative">
+            <canvas id="expense-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Recent Transactions Card -->
+        <div class="bg-white rounded-2xl shadow-sm p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-500">Transaksi Terakhir</h2>
+            <button onclick="switchView('transaksi')" class="text-emerald-500 text-xs font-medium">Lihat Semua</button>
+          </div>
+          <div id="dashboard-recent-list">
+            <!-- Diisi oleh ui.js -->
+            <div class="text-center py-6 text-slate-400 text-sm">
+              <i data-lucide="receipt" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+              Belum ada transaksi
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW: Transaksi -->
+    <section id="view-transaksi" class="view hidden flex-1 overflow-y-auto no-scrollbar pb-24">
+      <!-- Header -->
+      <div class="bg-white sticky top-0 z-10 px-4 py-4 border-b border-slate-100">
+        <h1 class="text-lg font-bold text-slate-800 mb-3">Riwayat Transaksi</h1>
+        <!-- Filter Bulan -->
+        <div class="flex items-center justify-between">
+          <button id="btn-prev-month" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
+            <i data-lucide="chevron-left" class="w-5 h-5 text-slate-500"></i>
+          </button>
+          <span id="filter-month-label" class="text-sm font-semibold text-slate-700">September 2026</span>
+          <button id="btn-next-month" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
+            <i data-lucide="chevron-right" class="w-5 h-5 text-slate-500"></i>
+          </button>
+        </div>
+      </div>
+      <!-- List -->
+      <div id="transaksi-list" class="px-4 py-3 space-y-1">
+        <!-- Diisi oleh ui.js -->
+        <div class="text-center py-12 text-slate-400 text-sm">
+          <i data-lucide="receipt" class="w-12 h-12 mx-auto mb-2 text-slate-300"></i>
+          Belum ada transaksi bulan ini
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: Dompet -->
+    <section id="view-dompet" class="view hidden flex-1 overflow-y-auto no-scrollbar pb-24">
+      <!-- Header -->
+      <div class="bg-white sticky top-0 z-10 px-4 pt-10 pb-4 border-b border-slate-100">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-slate-500 text-xs">Total Semua Saldo</p>
+            <h1 id="dompet-total-saldo" class="text-2xl font-bold text-slate-800">Rp 0</h1>
+          </div>
+          <button id="btn-tambah-dompet" class="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-md btn-ripple">
+            <i data-lucide="plus" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Grid Dompet -->
+      <div id="dompet-list" class="px-4 py-4 grid grid-cols-2 gap-3">
+        <!-- Diisi oleh ui.js -->
+        <div class="col-span-2 text-center py-12 text-slate-400 text-sm">
+          <i data-lucide="wallet" class="w-12 h-12 mx-auto mb-2 text-slate-300"></i>
+          Belum ada dompet. Tambahkan dompet pertamamu!
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: Pengaturan -->
+    <section id="view-pengaturan" class="view hidden flex-1 overflow-y-auto no-scrollbar pb-24">
+      <div class="px-4 pt-10 pb-4">
+        <h1 class="text-xl font-bold text-slate-800 mb-6">Pengaturan</h1>
+
+        <!-- Kategori -->
+        <div class="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Kategori</p>
+          </div>
+          <button id="btn-kelola-kategori" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple">
+            <div class="flex items-center gap-3">
+              <i data-lucide="tag" class="w-5 h-5 text-emerald-500"></i>
+              <span class="text-sm font-medium text-slate-700">Kelola Kategori</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </button>
+        </div>
+
+        <!-- Data -->
+        <div class="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Data</p>
+          </div>
+          <button id="btn-export-json" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple border-b border-slate-100">
+            <div class="flex items-center gap-3">
+              <i data-lucide="download" class="w-5 h-5 text-emerald-500"></i>
+              <span class="text-sm font-medium text-slate-700">Export Data (JSON)</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </button>
+          <button id="btn-export-csv" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple border-b border-slate-100">
+            <div class="flex items-center gap-3">
+              <i data-lucide="file-spreadsheet" class="w-5 h-5 text-emerald-500"></i>
+              <span class="text-sm font-medium text-slate-700">Export Data (CSV)</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </button>
+          <label class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i data-lucide="upload" class="w-5 h-5 text-emerald-500"></i>
+              <span class="text-sm font-medium text-slate-700">Import Data (JSON)</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+            <input id="input-import-file" type="file" accept=".json" class="hidden" />
+          </label>
+        </div>
+
+        <!-- Bahaya -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Zona Bahaya</p>
+          </div>
+          <button id="btn-clear-data" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-rose-50 btn-ripple">
+            <div class="flex items-center gap-3">
+              <i data-lucide="trash-2" class="w-5 h-5 text-rose-500"></i>
+              <span class="text-sm font-medium text-rose-600">Hapus Semua Data</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-rose-300"></i>
+          </button>
+        </div>
+
+        <!-- App Info -->
+        <p class="text-center text-xs text-slate-400 mt-8">CatatUang v1.0.0 — Data tersimpan di perangkat ini</p>
+      </div>
+    </section>
+
+    <!-- ===================== BOTTOM NAVIGATION ===================== -->
+    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-slate-100 z-20 safe-area-bottom">
+      <div class="flex items-center justify-around h-16 px-2 relative">
+
+        <!-- Dashboard -->
+        <button onclick="switchView('dashboard')" data-nav="dashboard"
+          class="nav-btn flex flex-col items-center gap-0.5 w-14 py-1 rounded-xl transition-colors">
+          <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+          <span class="text-[10px] font-medium">Beranda</span>
+        </button>
+
+        <!-- Transaksi -->
+        <button onclick="switchView('transaksi')" data-nav="transaksi"
+          class="nav-btn flex flex-col items-center gap-0.5 w-14 py-1 rounded-xl transition-colors">
+          <i data-lucide="list" class="w-5 h-5"></i>
+          <span class="text-[10px] font-medium">Transaksi</span>
+        </button>
+
+        <!-- FAB Tambah (tengah) -->
+        <div class="relative -mt-6">
+          <button id="btn-fab-add"
+            class="w-14 h-14 bg-emerald-500 text-white rounded-full shadow-lg flex items-center justify-center btn-ripple hover:bg-emerald-600 active:scale-95 transition-all">
+            <i data-lucide="plus" class="w-7 h-7"></i>
+          </button>
+        </div>
+
+        <!-- Dompet -->
+        <button onclick="switchView('dompet')" data-nav="dompet"
+          class="nav-btn flex flex-col items-center gap-0.5 w-14 py-1 rounded-xl transition-colors">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+          <span class="text-[10px] font-medium">Dompet</span>
+        </button>
+
+        <!-- Pengaturan -->
+        <button onclick="switchView('pengaturan')" data-nav="pengaturan"
+          class="nav-btn flex flex-col items-center gap-0.5 w-14 py-1 rounded-xl transition-colors">
+          <i data-lucide="settings" class="w-5 h-5"></i>
+          <span class="text-[10px] font-medium">Pengaturan</span>
+        </button>
+
+      </div>
+    </nav>
+
+  </div><!-- end #app -->
+
+  <!-- Toast notification -->
+  <div id="toast"></div>
+
+  <!-- ===================== MODAL: DOMPET ===================== -->
+  <!-- Backdrop -->
+  <div id="modal-dompet-backdrop"
+       class="hidden fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+       onclick="UI.closeDompetModal()"></div>
+
+  <!-- Sheet -->
+  <div id="modal-dompet"
+       class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-40 pb-safe">
+
+    <!-- Handle bar -->
+    <div class="flex justify-center pt-3 pb-1">
+      <div class="w-10 h-1 bg-slate-200 rounded-full"></div>
+    </div>
+
+    <!-- Header modal -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+      <h2 id="modal-dompet-title" class="text-base font-bold text-slate-800">Tambah Dompet</h2>
+      <button onclick="UI.closeDompetModal()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+        <i data-lucide="x" class="w-4 h-4 text-slate-500"></i>
+      </button>
+    </div>
+
+    <!-- Form -->
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Nama dompet -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Nama Dompet <span class="text-rose-500">*</span></label>
+        <input id="input-dompet-nama" type="text" maxlength="30" placeholder="contoh: BCA, GoPay, Tunai"
+               class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent placeholder:text-slate-300" />
+        <p id="error-dompet-nama" class="hidden text-xs text-rose-500 mt-1">Nama dompet tidak boleh kosong.</p>
+      </div>
+
+      <!-- Saldo awal (hanya saat tambah baru) -->
+      <div id="field-saldo-awal">
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Saldo Awal</label>
+        <div class="relative">
+          <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-medium">Rp</span>
+          <input id="input-dompet-saldo" type="number" min="0" placeholder="0"
+                 class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent placeholder:text-slate-300" />
+        </div>
+        <p id="error-dompet-saldo" class="hidden text-xs text-rose-500 mt-1">Saldo tidak boleh negatif.</p>
+      </div>
+
+      <!-- Pilih ikon -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-2">Ikon</label>
+        <div id="icon-picker" class="grid grid-cols-6 gap-2">
+          <!-- Diisi oleh JS -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer: tombol aksi -->
+    <div id="modal-dompet-footer" class="px-5 pb-6 pt-2 space-y-2">
+      <button id="btn-simpan-dompet" onclick="UI.onSimpanDompet()"
+              class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-semibold py-3 rounded-2xl transition-all btn-ripple">
+        Simpan
+      </button>
+      <!-- Tombol hapus — hanya tampil saat edit -->
+      <button id="btn-hapus-dompet" onclick="UI.onHapusDompet()"
+              class="hidden w-full bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-semibold py-3 rounded-2xl transition-all btn-ripple">
+        Hapus Dompet
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ===================== MODAL: TRANSAKSI ===================== -->
+  <!-- Backdrop -->
+  <div id="modal-transaksi-backdrop"
+       class="hidden fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+       onclick="UI.closeTxModal()"></div>
+
+  <!-- Sheet -->
+  <div id="modal-transaksi"
+       class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-40"
+       style="max-height:92vh; overflow-y:auto;">
+
+    <!-- Handle bar -->
+    <div class="flex justify-center pt-3 pb-1 sticky top-0 bg-white z-10">
+      <div class="w-10 h-1 bg-slate-200 rounded-full"></div>
+    </div>
+
+    <!-- Header modal -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 sticky top-5 bg-white z-10">
+      <h2 id="modal-tx-title" class="text-base font-bold text-slate-800">Tambah Transaksi</h2>
+      <button onclick="UI.closeTxModal()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+        <i data-lucide="x" class="w-4 h-4 text-slate-500"></i>
+      </button>
+    </div>
+
+    <!-- Form -->
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Segmented control: tipe transaksi -->
+      <div class="flex bg-slate-100 rounded-2xl p-1 gap-1">
+        <button id="tx-type-expense" onclick="UI.setTxType('expense')"
+                class="tx-type-btn flex-1 py-2 rounded-xl text-sm font-semibold transition-all">
+          Pengeluaran
+        </button>
+        <button id="tx-type-income" onclick="UI.setTxType('income')"
+                class="tx-type-btn flex-1 py-2 rounded-xl text-sm font-semibold transition-all">
+          Pemasukan
+        </button>
+        <button id="tx-type-transfer" onclick="UI.setTxType('transfer')"
+                class="tx-type-btn flex-1 py-2 rounded-xl text-sm font-semibold transition-all">
+          Transfer
+        </button>
+      </div>
+
+      <!-- Nominal -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Nominal <span class="text-rose-500">*</span></label>
+        <div class="relative">
+          <span class="absolute left-4 top-1/2 -translate-y-1/2 text-base text-slate-400 font-semibold">Rp</span>
+          <input id="input-tx-amount" type="number" min="1" placeholder="0"
+                 class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent placeholder:text-slate-300" />
+        </div>
+        <p id="error-tx-amount" class="hidden text-xs text-rose-500 mt-1">Nominal harus lebih dari 0.</p>
+      </div>
+
+      <!-- Kategori (tersembunyi saat Transfer) -->
+      <div id="field-tx-category">
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Kategori <span class="text-rose-500">*</span></label>
+        <div id="tx-category-list" class="grid grid-cols-3 gap-2">
+          <!-- Diisi oleh JS -->
+        </div>
+        <p id="error-tx-category" class="hidden text-xs text-rose-500 mt-1">Pilih kategori terlebih dahulu.</p>
+      </div>
+
+      <!-- Dompet Asal -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">
+          <span id="label-tx-wallet">Dompet</span> <span class="text-rose-500">*</span>
+        </label>
+        <div id="tx-wallet-list" class="flex flex-wrap gap-2">
+          <!-- Diisi oleh JS -->
+        </div>
+        <p id="error-tx-wallet" class="hidden text-xs text-rose-500 mt-1">Pilih dompet terlebih dahulu.</p>
+      </div>
+
+      <!-- Dompet Tujuan (hanya saat Transfer) -->
+      <div id="field-tx-wallet-to" class="hidden">
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Dompet Tujuan <span class="text-rose-500">*</span></label>
+        <div id="tx-wallet-to-list" class="flex flex-wrap gap-2">
+          <!-- Diisi oleh JS -->
+        </div>
+        <p id="error-tx-wallet-to" class="hidden text-xs text-rose-500 mt-1">Pilih dompet tujuan.</p>
+        <p id="error-tx-same-wallet" class="hidden text-xs text-rose-500 mt-1">Dompet asal dan tujuan tidak boleh sama.</p>
+      </div>
+
+      <!-- Tanggal & Waktu -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Tanggal & Waktu</label>
+        <input id="input-tx-date" type="datetime-local"
+               class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent" />
+      </div>
+
+      <!-- Catatan -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Catatan <span class="text-slate-300">(opsional)</span></label>
+        <input id="input-tx-note" type="text" maxlength="100" placeholder="contoh: makan siang bareng tim"
+               class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent placeholder:text-slate-300" />
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="px-5 pb-8 pt-2 space-y-2">
+      <button id="btn-simpan-tx" onclick="UI.onSimpanTx()"
+              class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-semibold py-3 rounded-2xl transition-all btn-ripple">
+        Simpan
+      </button>
+      <button id="btn-hapus-tx" onclick="UI.onHapusTx()"
+              class="hidden w-full bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-semibold py-3 rounded-2xl transition-all btn-ripple">
+        Hapus Transaksi
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ===================== MODAL: KATEGORI ===================== -->
+  <!-- Backdrop -->
+  <div id="modal-kategori-backdrop"
+       class="hidden fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+       onclick="UI.closeKategoriModal()"></div>
+
+  <!-- Sheet -->
+  <div id="modal-kategori"
+       class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-40"
+       style="max-height:90vh; overflow-y:auto;">
+
+    <!-- Handle bar -->
+    <div class="flex justify-center pt-3 pb-1 sticky top-0 bg-white z-10">
+      <div class="w-10 h-1 bg-slate-200 rounded-full"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 sticky top-5 bg-white z-10">
+      <h2 class="text-base font-bold text-slate-800">Kelola Kategori</h2>
+      <button onclick="UI.closeKategoriModal()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+        <i data-lucide="x" class="w-4 h-4 text-slate-500"></i>
+      </button>
+    </div>
+
+    <!-- Konten -->
+    <div class="px-5 py-4 space-y-5">
+
+      <!-- Form tambah kategori baru -->
+      <div class="bg-slate-50 rounded-2xl p-4 space-y-3">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tambah Kategori Baru</p>
+
+        <!-- Tipe -->
+        <div class="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
+          <button id="kat-type-expense" onclick="UI.setKatType('expense')"
+                  class="kat-type-btn flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all">
+            Pengeluaran
+          </button>
+          <button id="kat-type-income" onclick="UI.setKatType('income')"
+                  class="kat-type-btn flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all">
+            Pemasukan
+          </button>
+        </div>
+
+        <!-- Nama -->
+        <div>
+          <input id="input-kat-nama" type="text" maxlength="20" placeholder="Nama kategori…"
+                 class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent placeholder:text-slate-300" />
+          <p id="error-kat-nama" class="hidden text-xs text-rose-500 mt-1">Nama tidak boleh kosong atau sudah ada.</p>
+        </div>
+
+        <button onclick="UI.onTambahKategori()"
+                class="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold py-2.5 rounded-xl transition-all btn-ripple">
+          Tambah
+        </button>
+      </div>
+
+      <!-- Daftar: Pengeluaran -->
+      <div>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Pengeluaran</p>
+        <div id="kat-list-expense" class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-50">
+          <!-- Diisi JS -->
+        </div>
+      </div>
+
+      <!-- Daftar: Pemasukan -->
+      <div class="pb-6">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Pemasukan</p>
+        <div id="kat-list-income" class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-50">
+          <!-- Diisi JS -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: KONFIRMASI ===================== -->
+  <div id="modal-konfirmasi-backdrop"
+       class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
+    <div id="modal-konfirmasi" class="bg-white rounded-2xl w-full max-w-xs p-6 shadow-xl">
+      <h3 id="konfirmasi-title" class="text-base font-bold text-slate-800 mb-2">Konfirmasi</h3>
+      <p  id="konfirmasi-message" class="text-sm text-slate-500 mb-5">Yakin?</p>
+      <div class="flex gap-3">
+        <button onclick="UI.closeKonfirmasi()"
+                class="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
+          Batal
+        </button>
+        <button id="btn-konfirmasi-ok"
+                class="flex-1 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600">
+          Hapus
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SCRIPTS ===================== -->
+  <script src="assets/js/storage.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/ui.js"></script>
+  <script src="assets/js/chart.js"></script>
+
+</body>
+</html>
