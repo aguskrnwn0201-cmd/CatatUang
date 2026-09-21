@@ -89,4 +89,3 @@ Proyek ini dibuat untuk penggunaan pribadi secara bebas dan bersifat open-source
 
 ---
 
-Semua dokumen markdown (`PRD.MD`, `ARCHITECTURE.MD`, `DESIGN.MD`, `FRONTEND.MD`, `SKILL.MD`, `ROADMAP.MD`, dan `README.MD`) sekarang sudah lengkap dan siap di-commit ke repository proyekmu!
