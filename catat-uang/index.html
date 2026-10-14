@@ -174,6 +174,17 @@
           </div>
         </div>
 
+        <!-- Budget Card — hanya tampil jika ada budget yang di-set -->
+        <div id="dashboard-budget-card" class="hidden bg-white rounded-2xl shadow-sm p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-700">Budget Bulan Ini</h2>
+            <span id="dashboard-budget-month" class="text-xs text-slate-400"></span>
+          </div>
+          <div id="dashboard-budget-list" class="space-y-3">
+            <!-- Diisi oleh JS -->
+          </div>
+        </div>
+
         <!-- Recent Transactions Card -->
         <div class="bg-white rounded-2xl shadow-sm p-4">
           <div class="flex items-center justify-between mb-3">
@@ -195,18 +206,64 @@
     <!-- VIEW: Transaksi -->
     <section id="view-transaksi" class="view hidden flex-1 overflow-y-auto no-scrollbar pb-24">
       <!-- Header -->
-      <div class="bg-white sticky top-0 z-10 px-4 py-4 border-b border-slate-100">
-        <h1 class="text-lg font-bold text-slate-800 mb-3">Riwayat Transaksi</h1>
-        <!-- Filter Bulan -->
+      <div class="bg-white sticky top-0 z-10 px-4 py-4 border-b border-slate-100 space-y-3">
+
+        <!-- Baris 1: Judul + filter bulan -->
         <div class="flex items-center justify-between">
-          <button id="btn-prev-month" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
-            <i data-lucide="chevron-left" class="w-5 h-5 text-slate-500"></i>
-          </button>
-          <span id="filter-month-label" class="text-sm font-semibold text-slate-700">September 2026</span>
-          <button id="btn-next-month" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
-            <i data-lucide="chevron-right" class="w-5 h-5 text-slate-500"></i>
+          <h1 class="text-lg font-bold text-slate-800">Riwayat Transaksi</h1>
+          <div class="flex items-center gap-1">
+            <button id="btn-prev-month" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
+              <i data-lucide="chevron-left" class="w-4 h-4 text-slate-500"></i>
+            </button>
+            <span id="filter-month-label" class="text-sm font-semibold text-slate-700 min-w-[110px] text-center">September 2026</span>
+            <button id="btn-next-month" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 btn-ripple">
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Baris 2: Search bar -->
+        <div class="relative">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"></i>
+          <input id="input-tx-search" type="text" placeholder="Cari transaksi…"
+                 class="w-full bg-slate-100 rounded-xl pl-9 pr-9 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:text-slate-400" />
+          <button id="btn-clear-search"
+                  class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
+
+        <!-- Baris 3: Filter chips -->
+        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          <!-- Chip tipe -->
+          <button data-filter-type="all"
+                  class="tx-filter-chip flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-all
+                         bg-emerald-500 text-white border-emerald-500">
+            Semua
+          </button>
+          <button data-filter-type="expense"
+                  class="tx-filter-chip flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-all
+                         bg-white text-slate-500 border-slate-200 hover:border-rose-300">
+            Pengeluaran
+          </button>
+          <button data-filter-type="income"
+                  class="tx-filter-chip flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-all
+                         bg-white text-slate-500 border-slate-200 hover:border-green-300">
+            Pemasukan
+          </button>
+          <button data-filter-type="transfer"
+                  class="tx-filter-chip flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-all
+                         bg-white text-slate-500 border-slate-200 hover:border-blue-300">
+            Transfer
+          </button>
+          <!-- Separator -->
+          <div class="w-px bg-slate-200 flex-shrink-0 mx-1"></div>
+          <!-- Filter by kategori (diisi JS) -->
+          <div id="tx-filter-category-chips" class="flex gap-2">
+            <!-- Diisi oleh JS -->
+          </div>
+        </div>
+
       </div>
       <!-- List -->
       <div id="transaksi-list" class="px-4 py-3 space-y-1">
@@ -250,12 +307,19 @@
         <!-- Kategori -->
         <div class="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden">
           <div class="px-4 py-3 border-b border-slate-100">
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Kategori</p>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Kategori & Budget</p>
           </div>
-          <button id="btn-kelola-kategori" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple">
+          <button id="btn-kelola-kategori" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple border-b border-slate-100">
             <div class="flex items-center gap-3">
               <i data-lucide="tag" class="w-5 h-5 text-emerald-500"></i>
               <span class="text-sm font-medium text-slate-700">Kelola Kategori</span>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+          </button>
+          <button id="btn-kelola-budget" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 btn-ripple">
+            <div class="flex items-center gap-3">
+              <i data-lucide="wallet-minimal" class="w-5 h-5 text-emerald-500"></i>
+              <span class="text-sm font-medium text-slate-700">Kelola Budget</span>
             </div>
             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
           </button>
@@ -539,6 +603,41 @@
               class="hidden w-full bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-semibold py-3 rounded-2xl transition-all btn-ripple">
         Hapus Transaksi
       </button>
+    </div>
+
+  </div>
+
+  <!-- ===================== MODAL: BUDGET ===================== -->
+  <!-- Backdrop -->
+  <div id="modal-budget-backdrop"
+       class="hidden fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+       onclick="UI.closeBudgetModal()"></div>
+
+  <!-- Sheet -->
+  <div id="modal-budget"
+       class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-40"
+       style="max-height:90vh; overflow-y:auto;">
+
+    <!-- Handle bar -->
+    <div class="flex justify-center pt-3 pb-1 sticky top-0 bg-white z-10">
+      <div class="w-10 h-1 bg-slate-200 rounded-full"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 sticky top-5 bg-white z-10">
+      <div>
+        <h2 class="text-base font-bold text-slate-800">Kelola Budget</h2>
+        <p class="text-xs text-slate-400">Set limit pengeluaran per kategori per bulan</p>
+      </div>
+      <button onclick="UI.closeBudgetModal()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+        <i data-lucide="x" class="w-4 h-4 text-slate-500"></i>
+      </button>
+    </div>
+
+    <!-- Daftar kategori expense + input budget -->
+    <div id="budget-category-list" class="px-5 py-4 space-y-3 pb-10">
+      <!-- Diisi oleh JS -->
     </div>
 
   </div>

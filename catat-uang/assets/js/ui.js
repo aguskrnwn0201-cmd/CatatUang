@@ -17,6 +17,7 @@ const UI = {
     }
     this._updateDashboardSummary();
     this._renderRecentTransactions();
+    this.renderDashboardBudget();
     if (typeof AppChart !== 'undefined') {
       AppChart.updateExpensesChart(this._getExpenseChartData());
     }
@@ -92,8 +93,16 @@ const UI = {
   // TRANSAKSI
   // ============================================================
 
+  // State filter transaksi
+  _txFilter: {
+    type:       'all',    // 'all' | 'expense' | 'income' | 'transfer'
+    categoryId: null,     // null = semua kategori
+    search:     '',       // keyword pencarian
+  },
+
   renderTransaksi() {
     this._updateFilterLabel();
+    this._renderCategoryFilterChips();
     this._renderTransactionList();
     lucide.createIcons();
   },
@@ -103,25 +112,81 @@ const UI = {
     if (el) el.textContent = formatMonthYear(AppState.filter.month, AppState.filter.year);
   },
 
+  /** Render chip kategori secara dinamis berdasarkan kategori expense yang ada */
+  _renderCategoryFilterChips() {
+    const container = document.getElementById('tx-filter-category-chips');
+    if (!container) return;
+
+    const cats = AppState.categories.expense;
+    container.innerHTML = cats.map(cat => {
+      const isActive = this._txFilter.categoryId === cat.id;
+      return `
+        <button data-filter-cat="${cat.id}"
+                class="tx-filter-cat-chip flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border transition-all
+                       ${isActive
+                         ? 'bg-rose-500 text-white border-rose-500'
+                         : 'bg-white text-slate-500 border-slate-200 hover:border-rose-300'}">
+          <i data-lucide="${cat.icon}" class="w-3 h-3"></i>
+          ${this._escapeHTML(cat.name)}
+        </button>`;
+    }).join('');
+    lucide.createIcons();
+  },
+
+  /** Update active state chip tipe */
+  _updateTypeChips() {
+    document.querySelectorAll('.tx-filter-chip').forEach(btn => {
+      const isActive = btn.dataset.filterType === this._txFilter.type;
+      btn.classList.toggle('bg-emerald-500',  isActive);
+      btn.classList.toggle('text-white',       isActive);
+      btn.classList.toggle('border-emerald-500', isActive);
+      btn.classList.toggle('bg-white',         !isActive);
+      btn.classList.toggle('text-slate-500',   !isActive);
+      btn.classList.toggle('border-slate-200', !isActive);
+    });
+  },
+
   _renderTransactionList() {
     const container = document.getElementById('transaksi-list');
     if (!container) return;
 
-    const { month, year } = AppState.filter;
+    const { month, year }                    = AppState.filter;
+    const { type, categoryId, search }       = this._txFilter;
+    const keyword = search.toLowerCase().trim();
 
-    const filtered = AppState.transactions
-      .filter(tx => {
-        const d = new Date(tx.date);
-        return d.getMonth() === month && d.getFullYear() === year;
-      })
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    let filtered = AppState.transactions.filter(tx => {
+      const d = new Date(tx.date);
+      // Filter bulan
+      if (d.getMonth() !== month || d.getFullYear() !== year) return false;
+      // Filter tipe
+      if (type !== 'all' && tx.type !== type) return false;
+      // Filter kategori
+      if (categoryId && tx.categoryId !== categoryId) return false;
+      // Search keyword
+      if (keyword) {
+        const cat    = getCategoryById(tx.categoryId);
+        const wallet = getWalletById(tx.walletId);
+        const haystack = [
+          cat    ? cat.name    : '',
+          wallet ? wallet.name : '',
+          tx.note || '',
+          String(tx.amount),
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(keyword)) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // Empty state
     if (filtered.length === 0) {
+      const isFiltered = type !== 'all' || categoryId || keyword;
       container.innerHTML = `
         <div class="text-center py-12 text-slate-400 text-sm">
-          <i data-lucide="receipt" class="w-12 h-12 mx-auto mb-2 text-slate-300"></i>
-          Belum ada transaksi bulan ini
+          <i data-lucide="${isFiltered ? 'search-x' : 'receipt'}" class="w-12 h-12 mx-auto mb-2 text-slate-300"></i>
+          ${isFiltered ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi bulan ini'}
+          ${isFiltered ? `<p class="mt-2"><button onclick="UI._resetTxFilter()" class="text-emerald-500 font-medium text-xs">Reset filter</button></p>` : ''}
         </div>`;
+      lucide.createIcons();
       return;
     }
 
@@ -143,6 +208,17 @@ const UI = {
         </div>
       </div>
     `).join('');
+    lucide.createIcons();
+  },
+
+  _resetTxFilter() {
+    this._txFilter = { type: 'all', categoryId: null, search: '' };
+    const searchInput = document.getElementById('input-tx-search');
+    if (searchInput) searchInput.value = '';
+    document.getElementById('btn-clear-search')?.classList.add('hidden');
+    this._updateTypeChips();
+    this._renderCategoryFilterChips();
+    this._renderTransactionList();
   },
 
   // ============================================================
@@ -386,6 +462,175 @@ const UI = {
   closeKonfirmasi() {
     document.getElementById('modal-konfirmasi-backdrop').classList.add('hidden');
     this._konfirmasiCallback = null;
+  },
+
+  // ============================================================
+  // MODAL BUDGET
+  // ============================================================
+
+  openBudgetModal() {
+    this._renderBudgetList();
+
+    const backdrop = document.getElementById('modal-budget-backdrop');
+    const modal    = document.getElementById('modal-budget');
+    backdrop.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    modal.classList.add('modal-enter');
+    setTimeout(() => modal.classList.remove('modal-enter'), 300);
+    lucide.createIcons();
+  },
+
+  closeBudgetModal() {
+    const backdrop = document.getElementById('modal-budget-backdrop');
+    const modal    = document.getElementById('modal-budget');
+    modal.classList.add('modal-leave');
+    setTimeout(() => {
+      modal.classList.remove('modal-leave');
+      modal.classList.add('hidden');
+      backdrop.classList.add('hidden');
+    }, 200);
+  },
+
+  _renderBudgetList() {
+    const container = document.getElementById('budget-category-list');
+    if (!container) return;
+
+    const cats = AppState.categories.expense;
+
+    if (cats.length === 0) {
+      container.innerHTML = `<p class="text-sm text-slate-400 text-center py-6">Belum ada kategori pengeluaran.</p>`;
+      return;
+    }
+
+    container.innerHTML = cats.map(cat => {
+      const current = AppState.budgets[cat.id] || '';
+      const { month, year } = AppState.filter;
+      const spent   = getSpentForCategory(cat.id, month, year);
+      const hasBudget = !!AppState.budgets[cat.id];
+
+      return `
+        <div class="bg-slate-50 rounded-2xl p-3">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-8 h-8 rounded-xl flex items-center justify-center bg-rose-100 text-rose-600 flex-shrink-0">
+              <i data-lucide="${cat.icon}" class="w-4 h-4"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-slate-700">${this._escapeHTML(cat.name)}</p>
+              ${hasBudget
+                ? `<p class="text-xs text-slate-400">Terpakai: ${formatRupiah(spent)}</p>`
+                : `<p class="text-xs text-slate-400">Belum ada budget</p>`
+              }
+            </div>
+          </div>
+          <div class="flex gap-2 items-center">
+            <div class="relative flex-1">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Rp</span>
+              <input type="number" min="0" placeholder="Tidak dibatasi"
+                     value="${current}"
+                     data-cat-id="${cat.id}"
+                     class="budget-input w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:text-slate-300" />
+            </div>
+            <button onclick="UI._saveBudgetItem('${cat.id}')"
+                    class="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors btn-ripple flex-shrink-0">
+              Simpan
+            </button>
+            ${hasBudget
+              ? `<button onclick="UI._deleteBudgetItem('${cat.id}')"
+                         class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors flex-shrink-0">
+                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                 </button>`
+              : ''
+            }
+          </div>
+        </div>`;
+    }).join('');
+
+    lucide.createIcons();
+  },
+
+  _saveBudgetItem(catId) {
+    const input  = document.querySelector(`.budget-input[data-cat-id="${catId}"]`);
+    if (!input) return;
+    const amount = parseFloat(input.value) || 0;
+    setBudget(catId, amount);
+    this._renderBudgetList();
+    this.renderDashboardBudget();
+    this.showToast(amount > 0 ? 'Budget berhasil disimpan' : 'Budget dihapus');
+  },
+
+  _deleteBudgetItem(catId) {
+    setBudget(catId, 0);
+    this._renderBudgetList();
+    this.renderDashboardBudget();
+    this.showToast('Budget dihapus');
+  },
+
+  // ============================================================
+  // DASHBOARD BUDGET SECTION
+  // ============================================================
+
+  renderDashboardBudget() {
+    const card      = document.getElementById('dashboard-budget-card');
+    const list      = document.getElementById('dashboard-budget-list');
+    const monthEl   = document.getElementById('dashboard-budget-month');
+    if (!card || !list) return;
+
+    const { month, year } = AppState.filter;
+    const summary = getBudgetSummary(month, year);
+
+    // Sembunyikan card kalau tidak ada budget sama sekali
+    if (summary.length === 0) {
+      card.classList.add('hidden');
+      return;
+    }
+
+    card.classList.remove('hidden');
+    if (monthEl) monthEl.textContent = formatMonthYear(month, year);
+
+    list.innerHTML = summary.map(({ cat, budget, spent, pct, status }) => {
+      const barColor = status === 'over'
+        ? 'bg-rose-500'
+        : status === 'warning'
+          ? 'bg-amber-400'
+          : 'bg-emerald-500';
+
+      const labelColor = status === 'over'
+        ? 'text-rose-600'
+        : status === 'warning'
+          ? 'text-amber-600'
+          : 'text-slate-500';
+
+      const statusBadge = status === 'over'
+        ? `<span class="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full">Melebihi!</span>`
+        : status === 'warning'
+          ? `<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">Hampir habis</span>`
+          : '';
+
+      return `
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-lg flex items-center justify-center bg-rose-100 text-rose-600">
+                <i data-lucide="${cat.icon}" class="w-3.5 h-3.5"></i>
+              </div>
+              <span class="text-sm font-medium text-slate-700">${this._escapeHTML(cat.name)}</span>
+              ${statusBadge}
+            </div>
+            <span class="text-xs font-semibold ${labelColor}">${pct.toFixed(0)}%</span>
+          </div>
+          <!-- Progress bar -->
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div class="${barColor} h-full rounded-full transition-all duration-500"
+                 style="width:${pct}%"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span class="text-xs text-slate-400">${formatRupiah(spent)}</span>
+            <span class="text-xs text-slate-400">dari ${formatRupiah(budget)}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    lucide.createIcons();
   },
 
   // ============================================================
@@ -852,6 +1097,7 @@ const UI = {
   _refreshAllViews() {
     this._updateDashboardSummary();
     this._renderRecentTransactions();
+    this.renderDashboardBudget();
     if (typeof AppChart !== 'undefined') {
       AppChart.updateExpensesChart(this._getExpenseChartData());
     }
@@ -930,6 +1176,51 @@ document.addEventListener('DOMContentLoaded', () => {
     UI._updateFilterLabel();
   });
 
+  // ── FILTER & SEARCH TRANSAKSI ─────────────────────────────
+
+  // Search input
+  document.getElementById('input-tx-search')?.addEventListener('input', (e) => {
+    const val = e.target.value;
+    UI._txFilter.search = val;
+    document.getElementById('btn-clear-search')?.classList.toggle('hidden', !val);
+    UI._renderTransactionList();
+  });
+
+  // Tombol clear search
+  document.getElementById('btn-clear-search')?.addEventListener('click', () => {
+    const input = document.getElementById('input-tx-search');
+    if (input) input.value = '';
+    UI._txFilter.search = '';
+    document.getElementById('btn-clear-search').classList.add('hidden');
+    UI._renderTransactionList();
+    input?.focus();
+  });
+
+  // Filter chips tipe — pakai event delegation
+  document.querySelectorAll('.tx-filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      UI._txFilter.type = btn.dataset.filterType;
+      UI._txFilter.categoryId = null; // reset kategori saat ganti tipe
+      UI._updateTypeChips();
+      UI._renderCategoryFilterChips();
+      UI._renderTransactionList();
+    });
+  });
+
+  // Filter chips kategori — event delegation di container
+  document.getElementById('tx-filter-category-chips')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter-cat]');
+    if (!btn) return;
+    const catId = btn.dataset.filterCat;
+    // Toggle: klik lagi untuk deselect
+    UI._txFilter.categoryId = UI._txFilter.categoryId === catId ? null : catId;
+    // Paksa tipe ke expense saat pilih kategori
+    if (UI._txFilter.categoryId) UI._txFilter.type = 'expense';
+    UI._updateTypeChips();
+    UI._renderCategoryFilterChips();
+    UI._renderTransactionList();
+  });
+
   // Tombol bulan sebelumnya (halaman Transaksi)
   document.getElementById('btn-prev-month')?.addEventListener('click', () => {
     if (AppState.filter.month === 0) {
@@ -938,10 +1229,14 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       AppState.filter.month -= 1;
     }
+    UI._txFilter.search = '';
+    UI._txFilter.categoryId = null;
+    const si = document.getElementById('input-tx-search');
+    if (si) si.value = '';
+    document.getElementById('btn-clear-search')?.classList.add('hidden');
     UI.renderTransaksi();
   });
 
-  // Tombol bulan berikutnya
   document.getElementById('btn-next-month')?.addEventListener('click', () => {
     if (AppState.filter.month === 11) {
       AppState.filter.month = 0;
@@ -949,6 +1244,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       AppState.filter.month += 1;
     }
+    UI._txFilter.search = '';
+    UI._txFilter.categoryId = null;
+    const si = document.getElementById('input-tx-search');
+    if (si) si.value = '';
+    document.getElementById('btn-clear-search')?.classList.add('hidden');
     UI.renderTransaksi();
   });
 
@@ -964,6 +1264,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tombol tambah dompet
   document.getElementById('btn-tambah-dompet')?.addEventListener('click', () => {
     UI.openDompetModal();
+  });
+
+  // Tombol kelola budget
+  document.getElementById('btn-kelola-budget')?.addEventListener('click', () => {
+    UI.openBudgetModal();
   });
 
   // Tombol kelola kategori

@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   CATEGORIES:   'cu_categories',
   TRANSACTIONS: 'cu_transactions',
   SETTINGS:     'cu_settings',
+  BUDGETS:      'cu_budgets',
 };
 
 const Storage = {

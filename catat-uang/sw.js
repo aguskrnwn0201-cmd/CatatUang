@@ -4,7 +4,7 @@
  * CDN di-cache runtime saat pertama kali diakses.
  */
 
-const CACHE_NAME = 'catatuang-v11';
+const CACHE_NAME = 'catatuang-v13';
 
 const CDN_ORIGINS = [
   'cdn.tailwindcss.com',

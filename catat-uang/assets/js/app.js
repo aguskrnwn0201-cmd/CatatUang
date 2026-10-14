@@ -39,12 +39,13 @@ const DEFAULT_SETTINGS = {
  * Selalu disinkronkan ke/dari LocalStorage lewat loadState() / saveState().
  */
 const AppState = {
-  wallets:      [],   // { id, name, icon, balance, createdAt }
+  wallets:      [],
   categories:   { income: [], expense: [] },
-  transactions: [],   // { id, type, amount, categoryId, walletId, walletToId?, date, note }
+  transactions: [],
+  budgets:      {},   // { [categoryId]: amount } — limit pengeluaran per kategori per bulan
   settings:     {},
   filter: {
-    month: new Date().getMonth(),   // 0-indexed (0 = Januari)
+    month: new Date().getMonth(),
     year:  new Date().getFullYear(),
   },
 };
@@ -62,6 +63,7 @@ function loadState() {
   AppState.categories   = Storage.load(STORAGE_KEYS.CATEGORIES,   { income: [], expense: [] });
   AppState.transactions = Storage.load(STORAGE_KEYS.TRANSACTIONS,  []);
   AppState.settings     = Storage.load(STORAGE_KEYS.SETTINGS,      {});
+  AppState.budgets      = Storage.load(STORAGE_KEYS.BUDGETS,       {});
 }
 
 /**
@@ -73,6 +75,7 @@ function saveState() {
   Storage.save(STORAGE_KEYS.CATEGORIES,   AppState.categories);
   Storage.save(STORAGE_KEYS.TRANSACTIONS, AppState.transactions);
   Storage.save(STORAGE_KEYS.SETTINGS,     AppState.settings);
+  Storage.save(STORAGE_KEYS.BUDGETS,      AppState.budgets);
 }
 
 /**
@@ -459,7 +462,61 @@ function deleteCategory(catId) {
 }
 
 // ============================================================
-// 10. DATA MANAGEMENT (Export / Import / Clear)
+// 10. BUDGET CRUD
+// ============================================================
+
+/**
+ * Set atau update limit budget untuk satu kategori.
+ * @param {string} categoryId
+ * @param {number} amount - 0 berarti hapus budget
+ */
+function setBudget(categoryId, amount) {
+  if (!amount || amount <= 0) {
+    delete AppState.budgets[categoryId];
+  } else {
+    AppState.budgets[categoryId] = Number(amount);
+  }
+  Storage.save(STORAGE_KEYS.BUDGETS, AppState.budgets);
+}
+
+/**
+ * Hitung total pengeluaran bulan ini untuk satu kategori.
+ * @param {string} categoryId
+ * @param {number} month - 0-indexed
+ * @param {number} year
+ * @returns {number}
+ */
+function getSpentForCategory(categoryId, month, year) {
+  return AppState.transactions
+    .filter(tx => {
+      const d = new Date(tx.date);
+      return tx.type === 'expense'
+        && tx.categoryId === categoryId
+        && d.getMonth() === month
+        && d.getFullYear() === year;
+    })
+    .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+/**
+ * Ambil semua kategori expense yang punya budget, beserta data spent-nya.
+ * @returns {Array} [{ cat, budget, spent, pct, status }]
+ */
+function getBudgetSummary(month, year) {
+  return AppState.categories.expense
+    .filter(cat => AppState.budgets[cat.id])
+    .map(cat => {
+      const budget = AppState.budgets[cat.id];
+      const spent  = getSpentForCategory(cat.id, month, year);
+      const pct    = Math.min((spent / budget) * 100, 100);
+      const status = pct >= 100 ? 'over' : pct >= 80 ? 'warning' : 'ok';
+      return { cat, budget, spent, pct, status };
+    })
+    .sort((a, b) => b.pct - a.pct); // tampilkan yang paling kritis duluan
+}
+
+// ============================================================
+// 11. DATA MANAGEMENT (Export / Import / Clear)
 // ============================================================
 
 /**
@@ -473,6 +530,7 @@ function exportJSON() {
     categories:   AppState.categories,
     transactions: AppState.transactions,
     settings:     AppState.settings,
+    budgets:      AppState.budgets,
   };
 
   const blob     = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -544,6 +602,7 @@ function importJSON(file, onSuccess, onError) {
       AppState.categories   = data.categories;
       AppState.transactions = Array.isArray(data.transactions) ? data.transactions : [];
       AppState.settings     = data.settings || { ...DEFAULT_SETTINGS };
+      AppState.budgets      = data.budgets  || {};
 
       saveState();
       onSuccess();
